@@ -17,6 +17,8 @@ function App() {
   const [newChannelName, setNewChannelName] = useState("");
   const [newChannelTopic, setNewChannelTopic] = useState("");
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [password, setPassword] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
   const messagesEndRef = useRef(null);
 
@@ -84,8 +86,12 @@ function App() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (username.trim() && socket) {
-      socket.emit("set_username", { username: username.trim() });
+    if (username.trim() && password && socket) {
+      socket.emit("set_username", {
+        username: username.trim(),
+        password: password,
+        action: isRegistering ? "register" : "login",
+      });
     }
   };
 
@@ -138,13 +144,33 @@ function App() {
           <form onSubmit={handleLogin}>
             <input
               type="text"
-              placeholder="Choose a username..."
+              placeholder="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoFocus
             />
-            <button type="submit">Connect</button>
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button type="submit">
+              {isRegistering ? "Register" : "Log In"}
+            </button>
           </form>
+          <p className="auth-toggle">
+            {isRegistering ? "Already have an account? " : "New here? "}
+            <span
+              className="auth-toggle-link"
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setError("");
+              }}
+            >
+              {isRegistering ? "Log in" : "Register"}
+            </span>
+          </p>
           {error && <div className="error">{error}</div>}
         </div>
       </div>
