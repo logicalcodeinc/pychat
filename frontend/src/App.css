@@ -40,7 +40,23 @@ body {
 
 .login-box form {
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+}
+
+.auth-toggle {
+  color: #888;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.auth-toggle-link {
+  color: #e94560;
+  cursor: pointer;
+}
+
+.auth-toggle-link:hover {
+  text-decoration: underline;
 }
 
 .login-box input {
@@ -51,7 +67,6 @@ body {
   color: #e0e0e0;
   font-size: 1rem;
   outline: none;
-  flex: 1;
 }
 
 .login-box input:focus {

@@ -2,10 +2,13 @@ from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 from datetime import datetime
+from db import init_db, register_user, authenticate_user, user_exists
 
 app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+init_db()
 
 # In-memory state
 channels = {"general": {"topic": "General discussion", "users": set()}}
@@ -69,13 +72,36 @@ def handle_disconnect():
 @socketio.on("set_username")
 def handle_set_username(data):
     username = data.get("username", "").strip()
+    password = data.get("password", "")
+    action = data.get("action", "login")  # "login" or "register"
+
     if not username:
         emit("error", {"message": "Username required"})
         return
-    all_usernames = {u["username"] for u in users.values()}
-    if username in all_usernames:
-        emit("error", {"message": "Username already taken"})
+    if not password:
+        emit("error", {"message": "Password required"})
         return
+
+    # Check if already logged in with this username in another session
+    all_usernames = {u["username"].lower() for u in users.values()}
+    if username.lower() in all_usernames:
+        emit("error", {"message": "Username is already connected"})
+        return
+
+    if action == "register":
+        ok, err = register_user(username, password)
+        if not ok:
+            emit("error", {"message": err})
+            return
+    else:
+        if not user_exists(username):
+            emit("error", {"message": "Username not registered. Please register first."})
+            return
+        ok, err = authenticate_user(username, password)
+        if not ok:
+            emit("error", {"message": err})
+            return
+
     users[request.sid] = {"username": username, "channel": None}
     emit("username_set", {"username": username})
 
