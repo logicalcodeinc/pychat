@@ -18,7 +18,11 @@ function App() {
   const [newChannelTopic, setNewChannelTopic] = useState("");
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -129,6 +133,29 @@ function App() {
     }
   };
 
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!query.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const params = new URLSearchParams({ q: query });
+        if (currentChannel) params.set("channel", currentChannel);
+        const res = await fetch(`${SOCKET_URL}/api/messages/search?${params}`);
+        const data = await res.json();
+        setSearchResults(data);
+      } catch (e) {
+        console.error("Search failed", e);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  };
+
   if (!loggedIn) {
     return (
       <div className="login-screen">
@@ -203,9 +230,60 @@ function App() {
         {currentChannel ? (
           <>
             <div className="channel-header">
-              <h3>#{currentChannel}</h3>
-              {channelTopic && <span className="topic">{channelTopic}</span>}
+              <div className="channel-header-info">
+                <h3>#{currentChannel}</h3>
+                {channelTopic && <span className="topic">{channelTopic}</span>}
+              </div>
+              <div className="search-bar">
+                <input
+                  type="text"
+                  placeholder="Search messages..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    className="search-clear"
+                    onClick={() => handleSearch("")}
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
             </div>
+            {searchResults !== null ? (
+              <div className="search-results">
+                <div className="search-results-header">
+                  <span>
+                    {searchLoading
+                      ? "Searching..."
+                      : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""}`}
+                  </span>
+                  <button onClick={() => handleSearch("")}>Close</button>
+                </div>
+                <div className="search-results-list">
+                  {searchResults.map((msg, i) => (
+                    <div key={i} className="search-result-item">
+                      <div className="search-result-meta">
+                        <span className="msg-username">{msg.username}</span>
+                        <span className="search-result-channel">
+                          #{msg.channel}
+                        </span>
+                        <span className="timestamp">
+                          {new Date(msg.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="msg-text">{msg.text}</div>
+                    </div>
+                  ))}
+                  {!searchLoading && searchResults.length === 0 && (
+                    <div className="search-no-results">
+                      No messages found.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="messages-area">
               <div className="messages">
                 {messages.map((msg, i) =>
@@ -237,6 +315,7 @@ function App() {
                 </ul>
               </div>
             </div>
+            )}
             <form className="message-input" onSubmit={handleSendMessage}>
               <input
                 type="text"
