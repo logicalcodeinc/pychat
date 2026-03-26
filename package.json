@@ -1,0 +1,15 @@
+{
+  "name": "pychat",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "frontend": "cd frontend && npm start",
+    "backend": "cd backend && venv/bin/python app.py",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && python3 -m venv venv && venv/bin/pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
