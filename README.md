@@ -46,7 +46,7 @@ npm run frontend  # React dev server on :3000
 
 ## Architecture
 
-```
+```text
 backend/
   app.py              # Flask + Socket.IO server
   requirements.txt    # Python dependencies
