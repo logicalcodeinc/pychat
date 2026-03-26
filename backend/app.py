@@ -10,6 +10,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # In-memory state
 channels = {"general": {"topic": "General discussion", "users": set()}}
 users = {}  # sid -> {"username": str, "channel": str}
+message_history = {}  # channel -> [message_dict, ...]
 
 
 @app.route("/api/channels")
@@ -32,8 +33,33 @@ def create_channel():
     if name in channels:
         return jsonify({"error": "Channel already exists"}), 409
     channels[name] = {"topic": topic, "users": set()}
+    message_history[name] = []
     socketio.emit("channel_created", {"name": name, "topic": topic, "user_count": 0})
     return jsonify({"name": name, "topic": topic}), 201
+
+
+@app.route("/api/messages/search")
+def search_messages():
+    query = request.args.get("q", "").strip().lower()
+    channel = request.args.get("channel", "").strip().lower()
+    if not query:
+        return jsonify([])
+    results = []
+    search_channels = [channel] if channel and channel in message_history else message_history.keys()
+    for ch in search_channels:
+        for msg in message_history.get(ch, []):
+            if msg["type"] != "chat":
+                continue
+            if query in msg["text"].lower() or query in msg["username"].lower():
+                results.append({**msg, "channel": ch})
+    results.sort(key=lambda m: m["timestamp"], reverse=True)
+    return jsonify(results[:100])
+
+
+def _store_message(channel, message):
+    if channel not in message_history:
+        message_history[channel] = []
+    message_history[channel].append(message)
 
 
 @socketio.on("connect")
@@ -50,15 +76,13 @@ def handle_disconnect():
         if channel and channel in channels:
             channels[channel]["users"].discard(user["username"])
             leave_room(channel)
-            emit(
-                "message",
-                {
-                    "type": "system",
-                    "text": f'{user["username"]} has left the channel',
-                    "timestamp": datetime.now().isoformat(),
-                },
-                to=channel,
-            )
+            msg = {
+                "type": "system",
+                "text": f'{user["username"]} has left the channel',
+                "timestamp": datetime.now().isoformat(),
+            }
+            _store_message(channel, msg)
+            emit("message", msg, to=channel)
             emit(
                 "user_list",
                 {"channel": channel, "users": sorted(channels[channel]["users"])},
@@ -97,15 +121,13 @@ def handle_join_channel(data):
     if old_channel and old_channel in channels:
         channels[old_channel]["users"].discard(user["username"])
         leave_room(old_channel)
-        emit(
-            "message",
-            {
-                "type": "system",
-                "text": f'{user["username"]} has left the channel',
-                "timestamp": datetime.now().isoformat(),
-            },
-            to=old_channel,
-        )
+        msg = {
+            "type": "system",
+            "text": f'{user["username"]} has left the channel',
+            "timestamp": datetime.now().isoformat(),
+        }
+        _store_message(old_channel, msg)
+        emit("message", msg, to=old_channel)
         emit(
             "user_list",
             {
@@ -119,15 +141,13 @@ def handle_join_channel(data):
     user["channel"] = channel_name
     channels[channel_name]["users"].add(user["username"])
     join_room(channel_name)
-    emit(
-        "message",
-        {
-            "type": "system",
-            "text": f'{user["username"]} has joined the channel',
-            "timestamp": datetime.now().isoformat(),
-        },
-        to=channel_name,
-    )
+    msg = {
+        "type": "system",
+        "text": f'{user["username"]} has joined the channel',
+        "timestamp": datetime.now().isoformat(),
+    }
+    _store_message(channel_name, msg)
+    emit("message", msg, to=channel_name)
     emit(
         "user_list",
         {
@@ -152,16 +172,14 @@ def handle_send_message(data):
     text = data.get("text", "").strip()
     if not text:
         return
-    emit(
-        "message",
-        {
-            "type": "chat",
-            "username": user["username"],
-            "text": text,
-            "timestamp": datetime.now().isoformat(),
-        },
-        to=user["channel"],
-    )
+    msg = {
+        "type": "chat",
+        "username": user["username"],
+        "text": text,
+        "timestamp": datetime.now().isoformat(),
+    }
+    _store_message(user["channel"], msg)
+    emit("message", msg, to=user["channel"])
 
 
 if __name__ == "__main__":
